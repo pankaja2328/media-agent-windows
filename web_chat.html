@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090d18">
+  <title>Media Agent</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --chat-font: max(20px, 1.05vw);
+      --ink: #f4f7ff;
+      --muted: #9daac4;
+      --line: rgba(150, 170, 220, .16);
+      --accent: #7892ff;
+      --accent-2: #9b72ff;
+      font-family: "Nirmala UI", "Noto Sans Sinhala", "Iskoola Pota", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: radial-gradient(circle at 12% 0%, rgba(91,111,230,.24), transparent 34rem), radial-gradient(circle at 94% 100%, rgba(127,72,210,.18), transparent 35rem), #090d18;
+      overflow: hidden;
+    }
+    button, textarea { font-family: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    .app {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      margin: auto;
+      padding: max(10px, 1vw);
+      padding-top: max(10px, 1vw, env(safe-area-inset-top));
+      padding-bottom: max(10px, 1vw, env(safe-area-inset-bottom));
+      display: grid;
+    }
+    .shell {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: clamp(18px, 2.5vw, 28px);
+      background: linear-gradient(145deg, rgba(20,28,49,.94), rgba(9,14,27,.95));
+      box-shadow: 0 24px 80px rgba(0,0,0,.38), inset 0 1px rgba(255,255,255,.04);
+      backdrop-filter: blur(18px);
+    }
+    header {
+      min-height: max(76px, 4.3vw);
+      padding: max(14px, 1vw) max(18px, 1.35vw);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+    .brand { min-width: 0; display: flex; align-items: center; gap: 13px; }
+    .logo {
+      width: max(46px, 2.5vw); height: max(46px, 2.5vw); flex: 0 0 auto; border-radius: max(15px, .8vw);
+      display: grid; place-items: center; font-size: max(23px, 1.25vw);
+      background: linear-gradient(145deg, var(--accent), var(--accent-2));
+      box-shadow: 0 10px 30px rgba(100,100,255,.28);
+    }
+    h1 { margin: 0; font-size: max(24px, 1.35vw); letter-spacing: -.02em; }
+    .status { color: var(--muted); font-size: max(14px, .78vw); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .status::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: #56d59a; box-shadow: 0 0 12px #56d59a; }
+    .tools { display: flex; align-items: center; gap: 8px; }
+    .size-tools { display: flex; padding: 3px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.035); }
+    .tool-button {
+      min-width: max(38px, 2vw); height: max(38px, 2vw); padding: 0 max(9px, .5vw); border: 0; border-radius: max(9px, .5vw);
+      color: #ccd5e8; background: transparent; cursor: pointer; font-weight: 700;
+    }
+    .tool-button:hover, .tool-button.active { color: white; background: rgba(120,146,255,.2); }
+    #exit { background: rgba(255,255,255,.07); border: 1px solid var(--line); }
+    #chat {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: max(18px, 1.6vw);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(140,155,200,.35) transparent;
+    }
+    .message {
+      width: fit-content;
+      max-width: 86%;
+      margin: 0 0 clamp(13px, 2vh, 20px);
+      padding: max(15px, .95vw) max(18px, 1.15vw);
+      border-radius: 20px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.72;
+      font-size: var(--chat-font);
+      letter-spacing: .005em;
+      box-shadow: 0 10px 28px rgba(0,0,0,.15);
+    }
+    .message::before { display: block; margin-bottom: 5px; font-size: .7em; line-height: 1.2; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; opacity: .64; }
+    .agent { background: rgba(26,35,58,.94); border: 1px solid rgba(154,174,220,.14); border-bottom-left-radius: 7px; }
+    .agent::before { content: "Agent"; color: #b9c6ff; }
+    .user { margin-left: auto; background: linear-gradient(145deg, #506fe5, #6e5bd1); border-bottom-right-radius: 7px; }
+    .user::before { content: "You"; color: #fff; }
+    .working { color: #c7d0e4; font-style: italic; animation: breathe 1.5s ease-in-out infinite; }
+    .download-panel {
+      --progress: 0;
+      position: relative; width: min(100%, 980px); max-width: 100%; padding: 0; overflow: hidden;
+      border: 1px solid rgba(116,151,255,.32); border-radius: clamp(20px,2vw,30px);
+      background: linear-gradient(145deg,rgba(17,27,52,.98),rgba(8,13,27,.98));
+      box-shadow: 0 24px 70px rgba(0,0,0,.36), 0 0 60px rgba(91,100,255,.10), inset 0 1px rgba(255,255,255,.07);
+      isolation: isolate;
+    }
+    .download-panel::before { content: "Live transfer"; position: absolute; z-index: 5; top: 18px; left: 20px; margin: 0; color: #bdc9ff; }
+    .download-panel::after {
+      content: ""; position: absolute; z-index: -2; inset: -80%;
+      background: conic-gradient(from 0deg,transparent 0 35%,rgba(82,110,255,.22),transparent 53% 76%,rgba(190,76,255,.18),transparent);
+      animation: auroraSpin 12s linear infinite;
+    }
+    .download-glow { position:absolute; z-index:-1; inset:1px; border-radius:inherit; overflow:hidden; background:linear-gradient(145deg,rgba(15,24,48,.96),rgba(8,13,28,.97)); }
+    .download-glow::before { content:""; position:absolute; width:420px; height:420px; left:-160px; top:-260px; border-radius:50%; background:radial-gradient(circle,rgba(70,126,255,.29),transparent 68%); animation:floatGlow 7s ease-in-out infinite alternate; }
+    .download-glow::after { content:""; position:absolute; width:400px; height:400px; right:-180px; bottom:-270px; border-radius:50%; background:radial-gradient(circle,rgba(168,73,255,.22),transparent 68%); animation:floatGlow 8s ease-in-out -2s infinite alternate-reverse; }
+    .particle-field { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+    .particle { position:absolute; bottom:-20px; width:5px; height:5px; border-radius:50%; background:#8ab5ff; box-shadow:0 0 14px #729cff; opacity:0; animation:particleRise var(--duration) linear var(--delay) infinite; left:var(--left); }
+    .download-content { position:relative; z-index:2; display:grid; grid-template-columns:auto minmax(0,1fr); gap:clamp(18px,2vw,30px); padding:62px clamp(18px,2.2vw,34px) clamp(20px,2.2vw,34px); }
+    .progress-orbit { position:relative; width:clamp(128px,12vw,174px); aspect-ratio:1; display:grid; place-items:center; filter:drop-shadow(0 15px 25px rgba(54,75,190,.28)); }
+    .progress-orbit svg { width:100%; height:100%; transform:rotate(-90deg); }
+    .orbit-track { fill:none; stroke:rgba(147,168,225,.11); stroke-width:9; }
+    .orbit-value { fill:none; stroke:url(#progressGradient); stroke-width:9; stroke-linecap:round; stroke-dasharray:289; stroke-dashoffset:calc(289 - 2.89 * var(--progress)); transition:stroke-dashoffset .55s cubic-bezier(.2,.8,.2,1); }
+    .orbit-spinner { fill:none; stroke:rgba(149,198,255,.68); stroke-width:2; stroke-dasharray:7 15; transform-origin:50% 50%; animation:orbitSpin 5s linear infinite; }
+    .progress-number { position:absolute; text-align:center; font-weight:900; font-size:clamp(25px,2.2vw,38px); letter-spacing:-.05em; text-shadow:0 0 25px rgba(112,151,255,.5); }
+    .progress-number small { display:block; margin-top:1px; color:#8190ac; font-size:11px; letter-spacing:.13em; text-transform:uppercase; }
+    .download-main { min-width:0; display:flex; flex-direction:column; justify-content:center; }
+    .download-stage { display:flex; align-items:center; gap:9px; margin-bottom:8px; color:#8eafff; font-size:.75em; font-weight:900; letter-spacing:.11em; text-transform:uppercase; }
+    .live-dot { width:9px; height:9px; border-radius:50%; background:#6a9aff; box-shadow:0 0 0 0 rgba(106,154,255,.5); animation:signalPulse 1.6s ease-out infinite; }
+    .download-title { margin:0 0 7px; color:#fff; font-size:clamp(22px,2vw,34px); line-height:1.18; letter-spacing:-.025em; }
+    .download-file { max-width:100%; color:#aebbd4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:.82em; }
+    .transfer-track { position:relative; height:14px; margin:22px 0 15px; overflow:hidden; border:1px solid rgba(145,170,230,.17); border-radius:999px; background:rgba(3,7,17,.74); box-shadow:inset 0 3px 8px rgba(0,0,0,.35); }
+    .transfer-fill { position:absolute; inset:0 auto 0 0; width:calc(var(--progress)*1%); border-radius:inherit; background:linear-gradient(90deg,#4779ff,#7b72ff 48%,#c25cff); box-shadow:0 0 24px rgba(104,112,255,.7); transition:width .55s cubic-bezier(.2,.8,.2,1); overflow:hidden; }
+    .transfer-fill::after { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 20%,rgba(255,255,255,.55) 43%,transparent 65%); transform:translateX(-100%); animation:trackShine 1.8s ease-in-out infinite; }
+    .transfer-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .stat { min-width:0; padding:11px 12px; border:1px solid rgba(145,170,230,.12); border-radius:14px; background:rgba(255,255,255,.035); }
+    .stat-label { display:block; margin-bottom:3px; color:#71809e; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+    .stat-value { display:block; color:#eef3ff; font-size:.82em; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .stage-line { grid-column:1/-1; display:grid; grid-template-columns:repeat(4,1fr); position:relative; margin-top:3px; }
+    .stage-line::before { content:""; position:absolute; left:10%; right:10%; top:8px; height:2px; background:rgba(130,150,200,.15); }
+    .stage-step { position:relative; padding-top:24px; color:#65728e; text-align:center; font-size:11px; font-weight:800; }
+    .stage-step::before { content:""; position:absolute; z-index:1; top:3px; left:50%; width:11px; height:11px; margin-left:-6px; border:2px solid #394763; border-radius:50%; background:#11192c; transition:.35s ease; }
+    .stage-step.active { color:#b9c7e5; }
+    .stage-step.active::before { border-color:#7898ff; background:#6f8fff; box-shadow:0 0 16px #6387ff; }
+    .download-panel.is-complete { border-color:rgba(81,220,159,.38); }
+    .download-panel.is-complete .live-dot { background:#51dca0; box-shadow:0 0 20px #51dca0; animation:none; }
+    .download-panel.is-complete .transfer-fill { background:linear-gradient(90deg,#28bb85,#62e3ad); box-shadow:0 0 25px rgba(71,219,159,.5); }
+    .download-panel.is-complete .orbit-value { stroke:#55dfa7; }
+    .download-panel.is-error { border-color:rgba(255,94,116,.45); }
+    @keyframes auroraSpin { to { transform:rotate(360deg); } }
+    @keyframes orbitSpin { to { transform:rotate(360deg); } }
+    @keyframes floatGlow { to { transform:translate(55px,35px) scale(1.15); } }
+    @keyframes signalPulse { 70% { box-shadow:0 0 0 10px rgba(106,154,255,0); } 100% { box-shadow:0 0 0 0 rgba(106,154,255,0); } }
+    @keyframes trackShine { 65%,100% { transform:translateX(130%); } }
+    @keyframes particleRise { 0% { transform:translateY(0) scale(.4); opacity:0; } 12% { opacity:.7; } 100% { transform:translateY(-420px) translateX(35px) scale(1.2); opacity:0; } }
+    .agent.cards { width: 100%; max-width: 100%; padding: 0; border: 0; background: transparent; box-shadow: none; }
+    .agent.cards::before { margin: 0 0 10px 3px; }
+    .recommendation-intro, .recommendation-footer { color: #cbd4e8; margin: 4px 3px 16px; line-height: 1.6; }
+    .recommendation-footer { margin-top: 16px; color: #919fba; font-size: .88em; }
+    .movie-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(290px, 20vw)), 1fr)); gap: max(14px, .8vw); }
+    .movie-card {
+      position: relative; overflow: hidden; min-height: max(230px, 13vw); padding: max(18px, 1vw);
+      border: 1px solid rgba(150,170,220,.17); border-radius: 19px;
+      background: linear-gradient(145deg, hsla(var(--hue),65%,55%,.16), rgba(20,28,48,.96) 48%);
+      box-shadow: 0 12px 32px rgba(0,0,0,.19); transition: transform .18s ease, border-color .18s ease;
+    }
+    .movie-card::after { content: ""; position: absolute; width: 150px; height: 150px; right: -65px; top: -70px; border-radius: 50%; background: hsla(var(--hue),80%,65%,.12); filter: blur(3px); }
+    .movie-card:hover { transform: translateY(-2px); border-color: rgba(145,164,255,.38); }
+    .movie-top { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 13px; }
+    .movie-number { width: 44px; height: 55px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(160deg, hsla(var(--hue),75%,65%,.88), hsla(var(--hue),65%,42%,.9)); color: white; font-weight: 900; box-shadow: 0 8px 20px hsla(var(--hue),70%,40%,.2); }
+    .movie-heading { min-width: 0; flex: 1; }
+    .movie-title { margin: 1px 0 7px; color: #fff; font-size: 1.05em; font-weight: 800; line-height: 1.3; }
+    .movie-badges { display: flex; flex-wrap: wrap; gap: 7px; }
+    .movie-badge { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.065); color: #bdc9df; font-size: .71em; font-weight: 700; }
+    .rating-badge { color: #ffe39a; background: rgba(255,190,60,.12); }
+    .movie-story, .movie-reason { position: relative; z-index: 1; margin: 15px 0 0; padding-top: 13px; border-top: 1px solid rgba(150,170,220,.12); color: #c4cee2; font-size: .87em; line-height: 1.62; }
+    .movie-reason { color: #aebbd4; }
+    .movie-story strong, .movie-reason strong { display: block; margin-bottom: 4px; color: #8fa7ff; font-size: .78em; letter-spacing: .07em; text-transform: uppercase; }
+    .rich-line { margin: 0 0 9px; }
+    .rich-line.bullet { position: relative; padding-left: 21px; }
+    .rich-line.bullet::before { content: ""; position: absolute; left: 3px; top: .72em; width: 6px; height: 6px; border-radius: 50%; background: #8da1ff; }
+    .rich-line strong { color: #fff; font-weight: 800; }
+    @keyframes breathe { 50% { opacity: .58; } }
+    .composer-wrap { padding: max(10px, .6vw) max(14px, 1.1vw) max(14px, 1vw); background: linear-gradient(transparent, rgba(7,11,21,.55)); }
+    form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 10px;
+      padding: 7px;
+      border: 1px solid rgba(150,170,220,.22);
+      border-radius: 18px;
+      background: rgba(12,18,32,.94);
+      box-shadow: 0 12px 35px rgba(0,0,0,.28);
+    }
+    textarea {
+      width: 100%; min-height: max(58px, 3.2vw); max-height: 220px; resize: none; border: 0; outline: 0;
+      border-radius: 13px; background: transparent; color: white; padding: 14px 13px;
+      font: var(--chat-font)/1.55 "Nirmala UI", "Noto Sans Sinhala", "Iskoola Pota", system-ui, sans-serif;
+    }
+    textarea::placeholder { color: #7f8ba5; }
+    #send {
+      min-width: max(108px, 5.8vw); height: max(58px, 3.2vw); padding: 0 max(20px, 1vw); border: 0; border-radius: max(14px, .75vw);
+      color: white; background: linear-gradient(145deg, var(--accent), #665de0);
+      box-shadow: 0 8px 24px rgba(87,102,225,.32); font-size: 1rem; font-weight: 800; cursor: pointer;
+    }
+    #send:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    #send:disabled { opacity: .5; cursor: wait; transform: none; }
+    .hint { padding: 6px 4px 0; color: #79859e; font-size: .74rem; text-align: center; }
+    @media (max-width: 700px) {
+      .app { padding: 0; }
+      .shell { border: 0; border-radius: 0; }
+      header { min-height: 68px; padding: max(10px, env(safe-area-inset-top)) 12px 10px; }
+      .logo { width: 40px; height: 40px; border-radius: 13px; font-size: 20px; }
+      .brand { gap: 10px; }
+      .size-tools .tool-button:first-child { display: none; }
+      .tool-button { min-width: 36px; height: 36px; }
+      #exit { font-size: 0; width: 38px; padding: 0; }
+      #exit::after { content: "×"; font-size: 23px; }
+      #chat { padding: 16px 11px; }
+      .message { max-width: 94%; padding: 13px 15px; border-radius: 17px; line-height: 1.66; }
+      .agent.cards { max-width: 100%; padding: 0; }
+      .movie-grid { grid-template-columns: 1fr; gap: 11px; }
+      .movie-card { min-height: 0; padding: 15px; border-radius: 17px; }
+      .movie-number { width: 40px; height: 49px; }
+      .download-content { grid-template-columns:1fr; justify-items:center; padding-top:58px; }
+      .progress-orbit { width:128px; }
+      .download-main { width:100%; text-align:center; }
+      .download-stage { justify-content:center; }
+      .transfer-stats { grid-template-columns:repeat(2,1fr); text-align:left; }
+      .stage-step { font-size:9px; }
+      .composer-wrap { padding: 7px 8px max(8px, env(safe-area-inset-bottom)); }
+      form { gap: 6px; padding: 5px; border-radius: 16px; }
+      textarea { min-height: 52px; padding: 12px 10px; }
+      #send { min-width: 62px; height: 52px; padding: 0 13px; font-size: 0; }
+      #send::after { content: "➤"; font-size: 22px; }
+      .hint { display: none; }
+    }
+    @media (max-width: 390px) {
+      .status { max-width: 150px; }
+      .size-tools { display: none; }
+      .message { max-width: 97%; }
+    }
+    @media (min-width: 1600px) { .message { max-width: 82%; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+<main class="app">
+  <section class="shell">
+    <header>
+      <div class="brand"><div class="logo">▶</div><div><h1>Media Agent</h1><div class="status">Ready · සිංහල + English</div></div></div>
+      <div class="tools">
+        <div class="size-tools" aria-label="Text size">
+          <button class="tool-button size-button" type="button" data-font="max(18px, .95vw)" aria-label="Smaller text">A−</button>
+          <button class="tool-button size-button active" type="button" data-font="max(20px, 1.05vw)" aria-label="Normal text">A</button>
+          <button class="tool-button size-button" type="button" data-font="max(23px, 1.2vw)" aria-label="Larger text">A+</button>
+        </div>
+        <button class="tool-button" id="exit" type="button">Exit</button>
+      </div>
+    </header>
+    <section id="chat" aria-live="polite"><div class="message agent">Media Agent is ready. Ask for recommendations or manage your media below.</div></section>
+    <div class="composer-wrap">
+      <form id="form"><textarea id="input" rows="1" autofocus placeholder="Type in Sinhala, English, or Singlish…" aria-label="Message"></textarea><button id="send" type="submit">Send</button></form>
+      <div class="hint">Enter to send · Shift + Enter for a new line</div>
+    </div>
+  </section>
+</main>
+<script>
+  const token="__CHAT_TOKEN__", chat=document.getElementById("chat"), input=document.getElementById("input"), send=document.getElementById("send");
+  function add(text,kind){const box=document.createElement("div");box.className=`message ${kind}`;box.textContent=text;chat.appendChild(box);chat.scrollTop=chat.scrollHeight;return box}
+  function clean(value){return String(value||"").replace(/\*\*/g,"").replace(/`/g,"").replace(/^\s*[-*]\s*/,"").trim()}
+  function appendInline(parent,text){const parts=String(text).split(/(\*\*.*?\*\*)/g);parts.forEach(part=>{if(part.startsWith("**")&&part.endsWith("**")){const strong=document.createElement("strong");strong.textContent=part.slice(2,-2);parent.appendChild(strong)}else{parent.appendChild(document.createTextNode(part))}})}
+  function parseRecommendations(text){
+    const lines=String(text).replace(/\r/g,"").split("\n"),items=[],intro=[],footer=[];let current=null;
+    for(const raw of lines){const line=raw.trim();if(!line)continue;const head=line.match(/^(?:[-*•]|\d+[.)])\s+\*\*(.+?)\*\*(?:\s*[—–-]+\s*(.*))?$/);if(head){current={title:clean(head[1]),meta:clean(head[2]),story:"",reason:""};items.push(current);continue}if(!current){intro.push(clean(line));continue}if(/^let me know|^would you like|^tell me if/i.test(line)){footer.push(clean(line));continue}const story=line.match(/Story\s*:\s*\**\s*(.*)/i);if(story){current.story=clean(story[1]);continue}const why=line.match(/Why (?:it(?:'s| is) )?(?:relevant|good|matches)\s*:\s*\**\s*(.*)/i);if(why){current.reason=clean(why[1]);continue}const type=line.match(/Type\s*:\s*\**\s*([^|*]+)/i);if(type&&!current.meta)current.meta=clean(type[1]);const rating=line.match(/IMDb(?:\s+Rating)?\s*:\s*\**\s*([0-9.]+)/i);if(rating&&!/IMDb/i.test(current.meta))current.meta+=(current.meta?" | ":"")+"IMDb: "+rating[1];if(!type&&!rating)current.story+=(current.story?" ":"")+clean(line)}
+    return items.length>=2?{items,intro:intro.join(" "),footer:footer.join(" ")}:null;
+  }
+  function renderRecommendations(box,data){
+    box.classList.add("cards");box.textContent="";if(data.intro){const intro=document.createElement("div");intro.className="recommendation-intro";intro.textContent=data.intro;box.appendChild(intro)}const grid=document.createElement("div");grid.className="movie-grid";
+    data.items.forEach((item,index)=>{const year=(item.title.match(/\((\d{4})\)/)||[])[1]||"";const title=item.title.replace(/\s*\(\d{4}\)\s*$/,"");const rating=(item.meta.match(/IMDb(?:\s+Rating)?\s*:\s*([0-9.]+)/i)||[])[1]||"N/A";const type=clean(item.meta.split("|")[0].replace(/IMDb.*$/i,""))||"Movie";const card=document.createElement("article");card.className="movie-card";card.style.setProperty("--hue",String((225+index*38)%360));const top=document.createElement("div");top.className="movie-top";const number=document.createElement("div");number.className="movie-number";number.textContent=String(index+1).padStart(2,"0");const heading=document.createElement("div");heading.className="movie-heading";const titleNode=document.createElement("div");titleNode.className="movie-title";titleNode.textContent=title;const badges=document.createElement("div");badges.className="movie-badges";[year,type].filter(Boolean).forEach(value=>{const badge=document.createElement("span");badge.className="movie-badge";badge.textContent=value;badges.appendChild(badge)});const score=document.createElement("span");score.className="movie-badge rating-badge";score.textContent="★ IMDb "+rating;badges.appendChild(score);heading.append(titleNode,badges);top.append(number,heading);const story=document.createElement("p");story.className="movie-story";const storyLabel=document.createElement("strong");storyLabel.textContent="Story";story.append(storyLabel,document.createTextNode(item.story||"Story information was not provided."));const reason=document.createElement("p");reason.className="movie-reason";const reasonLabel=document.createElement("strong");reasonLabel.textContent="Why recommended";reason.append(reasonLabel,document.createTextNode(item.reason||"A strong match for your request."));card.append(top,story,reason);grid.appendChild(card)});box.appendChild(grid);if(data.footer){const footer=document.createElement("div");footer.className="recommendation-footer";footer.textContent=data.footer;box.appendChild(footer)}
+  }
+  function renderRichText(box,text){box.textContent="";String(text).replace(/\r/g,"").split("\n").forEach(raw=>{const line=raw.trim();if(!line)return;const row=document.createElement("div");row.className="rich-line";let content=line;if(/^[-*•]\s+/.test(content)){row.classList.add("bullet");content=content.replace(/^[-*•]\s+/,"")}appendInline(row,content);box.appendChild(row)})}
+  function renderAgent(box,text){const recommendations=parseRecommendations(text);if(recommendations)renderRecommendations(box,recommendations);else renderRichText(box,text)}
+  const byteUnits=["B","KB","MB","GB","TB"];
+  function formatBytes(value){let size=Number(value)||0,index=0;while(size>=1024&&index<byteUnits.length-1){size/=1024;index++}return `${size>=100||index===0?size.toFixed(0):size.toFixed(1)} ${byteUnits[index]}`}
+  function formatEta(value){if(value===null||value===undefined||!isFinite(value))return "Calculating";const seconds=Math.max(0,Math.round(value)),hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60),rest=seconds%60;return hours?`${hours}h ${String(minutes).padStart(2,"0")}m`:minutes?`${minutes}m ${String(rest).padStart(2,"0")}s`:`${rest}s`}
+  function createDownloadCard(box){
+    box.className="message agent download-panel";box.textContent="";
+    const glow=document.createElement("div");glow.className="download-glow";const particles=document.createElement("div");particles.className="particle-field";
+    for(let i=0;i<15;i++){const particle=document.createElement("i");particle.className="particle";particle.style.setProperty("--left",`${5+(i*31)%92}%`);particle.style.setProperty("--duration",`${4.5+(i%5)*.8}s`);particle.style.setProperty("--delay",`${-(i%7)*.7}s`);particles.appendChild(particle)}
+    const content=document.createElement("div");content.className="download-content";
+    const orbit=document.createElement("div");orbit.className="progress-orbit";orbit.innerHTML='<svg viewBox="0 0 110 110" aria-hidden="true"><defs><linearGradient id="progressGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#55a7ff"/><stop offset=".52" stop-color="#8171ff"/><stop offset="1" stop-color="#cf5cff"/></linearGradient></defs><circle class="orbit-track" cx="55" cy="55" r="46"/><circle class="orbit-value" cx="55" cy="55" r="46"/><circle class="orbit-spinner" cx="55" cy="55" r="51"/></svg><div class="progress-number"><span data-role="percent">0%</span><small data-role="orbit-label">Preparing</small></div>';
+    const main=document.createElement("div");main.className="download-main";main.innerHTML='<div class="download-stage"><i class="live-dot"></i><span data-role="stage">Preparing request</span></div><h2 class="download-title" data-role="title">Media download</h2><div class="download-file" data-role="file">Waiting for the agent…</div><div class="transfer-track"><div class="transfer-fill"></div></div><div class="transfer-stats"><div class="stat"><span class="stat-label">Downloaded</span><span class="stat-value" data-role="size">0 B / —</span></div><div class="stat"><span class="stat-label">Speed</span><span class="stat-value" data-role="speed">—</span></div><div class="stat"><span class="stat-label">Time remaining</span><span class="stat-value" data-role="eta">—</span></div><div class="stat"><span class="stat-label">Quality</span><span class="stat-value" data-role="quality">Auto</span></div></div><div class="stage-line"><div class="stage-step active" data-step="searching">Search</div><div class="stage-step" data-step="selected">Select</div><div class="stage-step" data-step="downloading">Download</div><div class="stage-step" data-step="subtitles">Subtitles</div></div>';
+    content.append(orbit,main);box.append(glow,particles,content);return box;
+  }
+  const stageOrder={working:0,searching:0,selected:1,received:1,downloading:2,subtitles:3,subtitle_missing:3,complete:4,error:0};
+  const stageLabels={working:"Preparing your request",searching:"Scanning Telegram results",selected:"Best release selected",received:"File delivered by Telegram",downloading:"High-speed transfer in progress",subtitles:"Finding and syncing Sinhala subtitles",subtitle_missing:"Movie ready — subtitle not found",complete:"Download complete",error:"Download needs attention"};
+  function updateDownloadCard(box,event){
+    if(!box.classList.contains("download-panel"))createDownloadCard(box);const percent=Math.max(0,Math.min(100,Number(event.percent)||0));box.style.setProperty("--progress",percent.toFixed(2));box.classList.toggle("is-complete",event.stage==="complete");box.classList.toggle("is-error",event.stage==="error");
+    const set=(role,value)=>{const node=box.querySelector(`[data-role="${role}"]`);if(node&&value!==undefined&&value!==null&&value!=="")node.textContent=value};
+    set("percent",`${percent.toFixed(percent>=10?1:2)}%`);set("orbit-label",event.stage==="complete"?"Ready":event.stage==="subtitles"||event.stage==="subtitle_missing"?"Video ready":"Complete");set("stage",event.message||stageLabels[event.stage]||"Working");
+    const displayTitle=[event.title,event.year?`(${event.year})`:""].filter(Boolean).join(" ");set("title",displayTitle||"Media download");set("file",event.filename||event.message||"Finding the best available release…");set("quality",event.quality||"Auto");
+    if(event.total)set("size",`${formatBytes(event.current)} / ${formatBytes(event.total)}`);else if(event.current)set("size",formatBytes(event.current));set("speed",event.speed?`${formatBytes(event.speed)}/s`:event.stage==="complete"?"Finished":"—");set("eta",event.stage==="complete"?"Ready":event.stage==="subtitles"?"Finalizing":formatEta(event.eta));
+    const reached=stageOrder[event.stage]??0;box.querySelectorAll(".stage-step").forEach((step,index)=>step.classList.toggle("active",index<=reached));chat.scrollTop=chat.scrollHeight;
+  }
+  async function getProgress(after){const response=await fetch("/api/progress",{headers:{"X-Chat-Token":token,"X-Progress-After":String(after)}});if(!response.ok)return {events:[],latest:after};return response.json()}
+  function resizeInput(){input.style.height="auto";input.style.height=Math.min(input.scrollHeight,180)+"px"}
+  const savedFont=localStorage.getItem("mediaAgentTextSizeV2")||"max(20px, 1.05vw)";document.documentElement.style.setProperty("--chat-font",savedFont);document.querySelectorAll(".size-button").forEach(button=>{button.classList.toggle("active",button.dataset.font===savedFont);button.addEventListener("click",()=>{const font=button.dataset.font;document.documentElement.style.setProperty("--chat-font",font);localStorage.setItem("mediaAgentTextSizeV2",font);document.querySelectorAll(".size-button").forEach(item=>item.classList.toggle("active",item===button))})});
+  input.addEventListener("input",resizeInput);
+  document.getElementById("form").addEventListener("submit",async event=>{event.preventDefault();const message=input.value.trim();if(!message||send.disabled)return;add(message,"user");input.value="";resizeInput();send.disabled=true;const waiting=add("Working…","agent working");let sequence=0,hasProgress=false,polling=false;
+    const poll=async()=>{if(polling)return;polling=true;try{const data=await getProgress(sequence);sequence=data.latest??sequence;for(const item of data.events||[]){hasProgress=true;waiting.classList.remove("working");updateDownloadCard(waiting,item)}}catch(_error){}finally{polling=false}};
+    const timer=setInterval(poll,450);setTimeout(poll,120);
+    try{const response=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json","X-Chat-Token":token},body:JSON.stringify({message})});const data=await response.json();clearInterval(timer);await poll();waiting.classList.remove("working");if(response.ok){if(hasProgress){const answer=add("","agent");renderAgent(answer,data.answer)}else renderAgent(waiting,data.answer)}else{if(hasProgress){const errorBox=add("","agent");renderRichText(errorBox,data.error||"Request failed")}else renderRichText(waiting,data.error||"Request failed")}}catch(error){clearInterval(timer);if(hasProgress){const errorBox=add("","agent");renderRichText(errorBox,"Connection error: "+error.message)}else waiting.textContent="Connection error: "+error.message}finally{send.disabled=false;input.focus();chat.scrollTop=chat.scrollHeight}});
+  input.addEventListener("keydown",event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();document.getElementById("form").requestSubmit()}});
+  document.getElementById("exit").addEventListener("click",async()=>{await fetch("/api/shutdown",{method:"POST",headers:{"X-Chat-Token":token}});document.body.innerHTML='<main class="app"><section class="shell" style="place-items:center"><h1>Media Agent closed. You may close this tab.</h1></section></main>'});
+</script>
+</body>
+</html>

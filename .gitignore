@@ -1,0 +1,40 @@
+# Secrets and account sessions
+credentials.bin
+telegram_config.bin
+telegram_config.json
+*.session
+*.session-journal
+
+# Downloaded/private media and generated caches
+downloads/
+cache/
+*.zip
+*.mkv
+*.mp4
+*.avi
+*.mov
+*.m4v
+*.webm
+*.srt
+*.ass
+*.ssa
+*.vtt
+*.sub
+
+# Local environments and Python output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editors and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local diagnostics
+*.log
+*.part

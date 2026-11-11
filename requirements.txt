@@ -1,0 +1,9 @@
+langchain>=1.2,<2
+langgraph>=1.2,<2
+langchain-google-genai>=4.4,<5
+ddgs>=9.16,<10
+httpx>=0.28,<1
+telethon>=1.45,<2
+cryptg>=0.5,<1
+ffsubsync>=0.5,<1
+
