@@ -39,7 +39,17 @@ def tracked_files() -> list[Path]:
         text=True,
         check=True,
     )
-    return [ROOT / line for line in completed.stdout.splitlines() if line.strip()]
+    names = [line for line in completed.stdout.splitlines() if line.strip()]
+    if not names:
+        completed = subprocess.run(
+            ["git", "ls-files"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        names = [line for line in completed.stdout.splitlines() if line.strip()]
+    return [ROOT / line for line in names]
 
 
 def main() -> int:
