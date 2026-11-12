@@ -446,6 +446,7 @@ def download_tv_series(
     environment = os.environ.copy()
     environment["TELEGRAM_DOWNLOAD_ROOT"] = str(DOWNLOAD_ROOT)
     environment["TELEGRAM_QUALITY"] = quality
+    environment["PYTHONUNBUFFERED"] = "1"
     display_title = f"{title} S{season:02d}"
     emit_progress(
         "searching",
@@ -455,7 +456,7 @@ def download_tv_series(
         message="Searching every Telegram results page for season episodes",
     )
     process = subprocess.Popen(
-        [sys.executable, str(TV_SCRIPT)],
+        [sys.executable, "-u", str(TV_SCRIPT)],
         cwd=LEGACY_DIR,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
