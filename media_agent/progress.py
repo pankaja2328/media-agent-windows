@@ -13,7 +13,6 @@ def reset_progress(prompt: str = "") -> None:
     with _LOCK:
         _EVENTS.clear()
         _SEQUENCE = 0
-    emit_progress("working", message="Understanding your request", prompt=prompt)
 
 
 def emit_progress(stage: str, **details) -> None:

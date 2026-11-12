@@ -281,6 +281,19 @@ async def new_private_messages(client, before):
     return messages
 
 
+async def recent_private_bot_files(client, limit_per_bot=30):
+    """Recover matching files delivered just after an earlier run stopped."""
+    messages = []
+    async for dialog in client.iter_dialogs():
+        if not dialog.is_user or not getattr(dialog.entity, "bot", False):
+            continue
+        async for message in client.iter_messages(dialog.entity, limit=limit_per_bot):
+            if message.file and not message.out:
+                messages.append(message)
+    messages.sort(key=lambda item: (item.date, item.id))
+    return messages
+
+
 async def main():
     settings = load_credentials()
     api_hash = load_api_hash()
@@ -322,25 +335,36 @@ async def main():
         started_at = time.monotonic()
         last_activity = started_at
         results_finished = False
+        final_page_at = None
+        last_document_at = None
+        last_recovery_scan = 0.0
         last_status = 0.0
         max_wait_seconds = 10 * 60
+
+        def remember_document(message):
+            if not message.file or message.out:
+                return False
+            name = message.file.name or f"video{message.file.ext or ''}"
+            details = f"{name}\n{message.raw_text or ''}"
+            episodes = episode_numbers(details, season)
+            if not (
+                Path(name).suffix.lower() in {".mkv", ".mp4"}
+                and quality_pattern.search(details)
+                and episodes
+                and series_matches(details, series_name, season)
+                and message.document
+            ):
+                return False
+            is_new = message.document.id not in documents
+            documents[message.document.id] = (message, name, episodes)
+            return is_new
+
         while True:
             action_count = 0
             documents_before = len(documents)
             for message in await new_private_messages(client, before):
                 text = message.raw_text or ""
-                if message.file and not message.out:
-                    name = message.file.name or f"video{message.file.ext or ''}"
-                    details = f"{name}\n{text}"
-                    episodes = episode_numbers(details, season)
-                    if (
-                        Path(name).suffix.lower() in {".mkv", ".mp4"}
-                        and quality_pattern.search(details)
-                        and episodes
-                        and series_matches(details, series_name, season)
-                        and message.document
-                    ):
-                        documents[message.document.id] = (message, name, episodes)
+                remember_document(message)
 
                 button_labels = [
                     item.text or "" for row in (message.buttons or []) for item in row
@@ -401,8 +425,19 @@ async def main():
                             except Exception as error:
                                 print(f"Could not activate {label!r}: {error}")
             now = time.monotonic()
+            if results_finished and now - last_recovery_scan >= 30:
+                recovered = 0
+                for message in await recent_private_bot_files(client):
+                    recovered += int(remember_document(message))
+                last_recovery_scan = time.monotonic()
+                now = last_recovery_scan
+                if recovered:
+                    print(f"Recovered {recovered} recently delivered matching file(s).")
+            if results_finished and final_page_at is None:
+                final_page_at = now
             if len(documents) > documents_before:
                 last_activity = now
+                last_document_at = now
             if action_count == 0 and now - last_status >= 10:
                 page_state = "final page reached" if results_finished else "scanning pages"
                 print(
@@ -412,8 +447,31 @@ async def main():
                 last_status = now
 
             quiet_for = now - last_activity
-            if results_finished and quiet_for >= (30 if documents else 15):
-                break
+            if results_finished:
+                received_episodes = set().union(
+                    *(item[2] for item in documents.values())
+                ) if documents else set()
+                all_requested_received = bool(requested_episodes) and requested_episodes.issubset(
+                    received_episodes
+                )
+                if all_requested_received and quiet_for >= 15:
+                    print("All requested episode files have arrived.")
+                    break
+                # Delivery bots often need well over 15 seconds after the last
+                # results page. Wait longer for zero/partial deliveries while
+                # still keeping a bounded overall timeout.
+                delivery_reference = max(
+                    final_page_at or started_at,
+                    last_activity,
+                    last_document_at or started_at,
+                )
+                delivery_grace = 180 if not documents else 120
+                if now - delivery_reference >= delivery_grace:
+                    print(
+                        "Delivery-bot grace period ended. Processing the episode files "
+                        "received so far."
+                    )
+                    break
             if now - started_at >= max_wait_seconds:
                 print("Stopped after 10 minutes. Processing the files received so far.")
                 break

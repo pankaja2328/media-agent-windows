@@ -101,6 +101,15 @@
     .user { margin-left: auto; background: linear-gradient(145deg, #506fe5, #6e5bd1); border-bottom-right-radius: 7px; }
     .user::before { content: "You"; color: #fff; }
     .working { color: #c7d0e4; font-style: italic; animation: breathe 1.5s ease-in-out infinite; }
+    .agent-status { min-width:min(92vw,360px); padding:16px 19px; }
+    .agent-status::before { content:"Agent"; }
+    .thinking-row { display:flex; align-items:center; gap:13px; }
+    .thinking-orb { position:relative; width:36px; height:36px; flex:0 0 auto; border-radius:50%; background:conic-gradient(from 0deg,#7b91ff,#b16cff,#58b9ff,#7b91ff); animation:orbitSpin 1.25s linear infinite; box-shadow:0 0 22px rgba(113,133,255,.28); }
+    .thinking-orb::after { content:""; position:absolute; inset:4px; border-radius:50%; background:#1a233a; }
+    .thinking-copy { min-width:0; }
+    .thinking-title { color:#f3f6ff; font-weight:850; line-height:1.25; }
+    .thinking-detail { margin-top:3px; color:#8795b1; font-size:.72em; line-height:1.35; }
+    .thinking-dots::after { content:""; display:inline-block; width:1.3em; text-align:left; animation:thinkingDots 1.4s steps(4,end) infinite; }
     .download-panel {
       --progress: 0;
       position: relative; width: min(100%, 980px); max-width: 100%; padding: 0; overflow: hidden;
@@ -157,6 +166,7 @@
     @keyframes signalPulse { 70% { box-shadow:0 0 0 10px rgba(106,154,255,0); } 100% { box-shadow:0 0 0 0 rgba(106,154,255,0); } }
     @keyframes trackShine { 65%,100% { transform:translateX(130%); } }
     @keyframes particleRise { 0% { transform:translateY(0) scale(.4); opacity:0; } 12% { opacity:.7; } 100% { transform:translateY(-420px) translateX(35px) scale(1.2); opacity:0; } }
+    @keyframes thinkingDots { 0% { content:""; } 25% { content:"."; } 50% { content:".."; } 75%,100% { content:"..."; } }
     .agent.cards { width: 100%; max-width: 100%; padding: 0; border: 0; background: transparent; box-shadow: none; }
     .agent.cards::before { margin: 0 0 10px 3px; }
     .recommendation-intro, .recommendation-footer { color: #cbd4e8; margin: 4px 3px 16px; line-height: 1.6; }
@@ -286,6 +296,7 @@
   }
   function renderRichText(box,text){box.textContent="";String(text).replace(/\r/g,"").split("\n").forEach(raw=>{const line=raw.trim();if(!line)return;const row=document.createElement("div");row.className="rich-line";let content=line;if(/^[-*•]\s+/.test(content)){row.classList.add("bullet");content=content.replace(/^[-*•]\s+/,"")}appendInline(row,content);box.appendChild(row)})}
   function renderAgent(box,text){const recommendations=parseRecommendations(text);if(recommendations)renderRecommendations(box,recommendations);else renderRichText(box,text)}
+  function createAgentStatus(box){box.className="message agent agent-status";box.innerHTML='<div class="thinking-row"><div class="thinking-orb" aria-hidden="true"></div><div class="thinking-copy"><div class="thinking-title"><span data-role="agent-state">Thinking</span><span class="thinking-dots"></span></div><div class="thinking-detail" data-role="agent-detail">Understanding your request</div></div></div>';return box}
   const byteUnits=["B","KB","MB","GB","TB"];
   function formatBytes(value){let size=Number(value)||0,index=0;while(size>=1024&&index<byteUnits.length-1){size/=1024;index++}return `${size>=100||index===0?size.toFixed(0):size.toFixed(1)} ${byteUnits[index]}`}
   function formatEta(value){if(value===null||value===undefined||!isFinite(value))return "Calculating";const seconds=Math.max(0,Math.round(value)),hours=Math.floor(seconds/3600),minutes=Math.floor(seconds%3600/60),rest=seconds%60;return hours?`${hours}h ${String(minutes).padStart(2,"0")}m`:minutes?`${minutes}m ${String(rest).padStart(2,"0")}s`:`${rest}s`}
@@ -312,10 +323,10 @@
   function resizeInput(){input.style.height="auto";input.style.height=Math.min(input.scrollHeight,180)+"px"}
   const savedFont=localStorage.getItem("mediaAgentTextSizeV2")||"max(20px, 1.05vw)";document.documentElement.style.setProperty("--chat-font",savedFont);document.querySelectorAll(".size-button").forEach(button=>{button.classList.toggle("active",button.dataset.font===savedFont);button.addEventListener("click",()=>{const font=button.dataset.font;document.documentElement.style.setProperty("--chat-font",font);localStorage.setItem("mediaAgentTextSizeV2",font);document.querySelectorAll(".size-button").forEach(item=>item.classList.toggle("active",item===button))})});
   input.addEventListener("input",resizeInput);
-  document.getElementById("form").addEventListener("submit",async event=>{event.preventDefault();const message=input.value.trim();if(!message||send.disabled)return;add(message,"user");input.value="";resizeInput();send.disabled=true;const waiting=add("Working…","agent working");let sequence=0,hasProgress=false,polling=false;
+  document.getElementById("form").addEventListener("submit",async event=>{event.preventDefault();const message=input.value.trim();if(!message||send.disabled)return;add(message,"user");input.value="";resizeInput();send.disabled=true;const waiting=createAgentStatus(add("","agent"));let sequence=0,hasProgress=false,polling=false;const stateTimers=[setTimeout(()=>{const title=waiting.querySelector('[data-role="agent-state"]'),detail=waiting.querySelector('[data-role="agent-detail"]');if(title)title.textContent="Processing";if(detail)detail.textContent="Checking tools and preparing the response"},2200),setTimeout(()=>{const detail=waiting.querySelector('[data-role="agent-detail"]');if(detail)detail.textContent="Still working — complex requests can take a little longer"},9000)];
     const poll=async()=>{if(polling)return;polling=true;try{const data=await getProgress(sequence);sequence=data.latest??sequence;for(const item of data.events||[]){hasProgress=true;waiting.classList.remove("working");updateDownloadCard(waiting,item)}}catch(_error){}finally{polling=false}};
     const timer=setInterval(poll,450);setTimeout(poll,120);
-    try{const response=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json","X-Chat-Token":token},body:JSON.stringify({message})});const data=await response.json();clearInterval(timer);await poll();waiting.classList.remove("working");if(response.ok){if(hasProgress){const answer=add("","agent");renderAgent(answer,data.answer)}else renderAgent(waiting,data.answer)}else{if(hasProgress){const errorBox=add("","agent");renderRichText(errorBox,data.error||"Request failed")}else renderRichText(waiting,data.error||"Request failed")}}catch(error){clearInterval(timer);if(hasProgress){const errorBox=add("","agent");renderRichText(errorBox,"Connection error: "+error.message)}else waiting.textContent="Connection error: "+error.message}finally{send.disabled=false;input.focus();chat.scrollTop=chat.scrollHeight}});
+    try{const response=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json","X-Chat-Token":token},body:JSON.stringify({message})});const data=await response.json();clearInterval(timer);stateTimers.forEach(clearTimeout);await poll();waiting.classList.remove("working");if(response.ok){if(hasProgress){const answer=add("","agent");renderAgent(answer,data.answer)}else renderAgent(waiting,data.answer)}else{if(hasProgress){const errorBox=add("","agent");renderRichText(errorBox,data.error||"Request failed")}else renderRichText(waiting,data.error||"Request failed")}}catch(error){clearInterval(timer);stateTimers.forEach(clearTimeout);if(hasProgress){const errorBox=add("","agent");renderRichText(errorBox,"Connection error: "+error.message)}else waiting.textContent="Connection error: "+error.message}finally{send.disabled=false;input.focus();chat.scrollTop=chat.scrollHeight}});
   input.addEventListener("keydown",event=>{if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();document.getElementById("form").requestSubmit()}});
   document.getElementById("exit").addEventListener("click",async()=>{await fetch("/api/shutdown",{method:"POST",headers:{"X-Chat-Token":token}});document.body.innerHTML='<main class="app"><section class="shell" style="place-items:center"><h1>Media Agent closed. You may close this tab.</h1></section></main>'});
 </script>
