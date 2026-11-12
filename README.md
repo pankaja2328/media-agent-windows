@@ -42,9 +42,11 @@ written to the encrypted configuration file.
 - Ten-item recommendation cards with verified IMDb ratings
 - Requested 720p, 1080p, or 2160p release selection (720p default)
 - Live download percentage, speed, size, ETA, and processing stages
+- Live TV-season page scanning, episode selection, and batch-download activity
 - Concurrent Telegram transfers with 512 KB chunks
 - Safe ZIP subtitle extraction with archive limits and path-traversal protection
 - Sinhala subtitle selection and audio synchronization
+- Per-episode TV subtitle synchronization with exact video-matching filenames
 - Embedded English subtitle extraction when Sinhala subtitles are unavailable
 - Gemini batch translation from English SRT to Sinhala while preserving timestamps
 

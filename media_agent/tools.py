@@ -20,6 +20,7 @@ from langchain_core.tools import tool
 from .movie_downloader import download_movie_sync
 from .subtitle_downloader import download_sinhala_subtitle_sync as fetch_sinhala_subtitle
 from .subtitle_sync import select_and_sync_subtitles
+from .progress import emit_progress
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
@@ -322,6 +323,112 @@ def legal_watch_options(title: str, country: str = "Sri Lanka") -> str:
     return json.dumps(_search(query, 8), ensure_ascii=False)
 
 
+def _tv_eta_seconds(value: str) -> int | None:
+    try:
+        parts = [int(part) for part in value.split(":")]
+    except ValueError:
+        return None
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    return None
+
+
+def _publish_tv_status(line: str, title: str, season: int, quality: str) -> None:
+    line = line.strip()
+    if not line:
+        return
+    display_title = f"{title} S{season:02d}"
+    progress = re.search(
+        r"\]\s*([\d.]+)%\s+([\d,.]+)/([\d,.]+)\s+MB\s+"
+        r"([\d,.]+)\s+MB/s\s+ETA\s+([\d:]+)",
+        line,
+        re.I,
+    )
+    if progress:
+        current_mb = float(progress.group(2).replace(",", ""))
+        total_mb = float(progress.group(3).replace(",", ""))
+        speed_mb = float(progress.group(4).replace(",", ""))
+        emit_progress(
+            "downloading",
+            title=display_title,
+            quality=quality,
+            filename="Season episode batch",
+            percent=float(progress.group(1)),
+            current=int(current_mb * 1024 * 1024),
+            total=int(total_mb * 1024 * 1024),
+            speed=speed_mb * 1024 * 1024,
+            eta=_tv_eta_seconds(progress.group(5)),
+            message="Downloading season episodes concurrently",
+        )
+        return
+    if "Selecting:" in line:
+        filename = line.split("Selecting:", 1)[1].strip()
+        emit_progress(
+            "selected",
+            title=display_title,
+            quality=quality,
+            filename=filename,
+            message="Selecting matching season episodes",
+        )
+    elif "Status:" in line:
+        message = line[line.find("Status:") + 7 :].strip()
+        emit_progress(
+            "searching",
+            title=display_title,
+            quality=quality,
+            message=message,
+        )
+    elif "Opening next results page:" in line:
+        emit_progress(
+            "searching",
+            title=display_title,
+            quality=quality,
+            message="Scanning the next Telegram results page",
+        )
+    elif "Following:" in line:
+        emit_progress(
+            "selected",
+            title=display_title,
+            quality=quality,
+            message="Requesting selected episode files from Telegram",
+        )
+    elif "Detected episodes:" in line:
+        episodes = line.split("Detected episodes:", 1)[1].strip()
+        emit_progress(
+            "selected",
+            title=display_title,
+            quality=quality,
+            filename=episodes,
+            message=f"Episodes detected: {episodes}",
+        )
+    elif "Downloading " in line and "file(s) concurrently" in line:
+        emit_progress(
+            "downloading",
+            title=display_title,
+            quality=quality,
+            percent=0,
+            message="Starting concurrent episode downloads",
+        )
+    elif "Adding completed batch to ZIP" in line:
+        emit_progress(
+            "downloading",
+            title=display_title,
+            quality=quality,
+            percent=100,
+            message="Episodes downloaded — building the season ZIP",
+        )
+    elif "ZIP ready at" in line:
+        emit_progress(
+            "subtitles",
+            title=display_title,
+            quality=quality,
+            percent=100,
+            message="Season ZIP ready — searching and syncing subtitles",
+        )
+
+
 @tool
 def download_tv_series(
     title: str,
@@ -339,32 +446,96 @@ def download_tv_series(
     environment = os.environ.copy()
     environment["TELEGRAM_DOWNLOAD_ROOT"] = str(DOWNLOAD_ROOT)
     environment["TELEGRAM_QUALITY"] = quality
-    completed = subprocess.run(
+    display_title = f"{title} S{season:02d}"
+    emit_progress(
+        "searching",
+        title=display_title,
+        quality=quality,
+        percent=0,
+        message="Searching every Telegram results page for season episodes",
+    )
+    process = subprocess.Popen(
         [sys.executable, str(TV_SCRIPT)],
         cwd=LEGACY_DIR,
-        input=request,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        check=False,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
         env=environment,
     )
+    process.stdin.write(request)
+    process.stdin.flush()
+    process.stdin.close()
+    output_line = ""
+    while True:
+        character = process.stdout.read(1)
+        if character == "":
+            break
+        if character in {"\r", "\n"}:
+            if output_line.strip():
+                print(output_line.strip())
+                _publish_tv_status(output_line, title, season, quality)
+            output_line = ""
+        else:
+            output_line += character
+    if output_line.strip():
+        print(output_line.strip())
+        _publish_tv_status(output_line, title, season, quality)
+    returncode = process.wait()
     after = set(DOWNLOAD_ROOT.rglob("*.zip")) if DOWNLOAD_ROOT.exists() else set()
     created = sorted(after - before, key=lambda path: path.stat().st_mtime, reverse=True)
-    if completed.returncode == 0 and created:
+    if returncode == 0 and created:
+        emit_progress(
+            "subtitles",
+            title=display_title,
+            quality=quality,
+            percent=100,
+            message="Searching Sinhala subtitles for every episode",
+        )
         subtitles = fetch_sinhala_subtitle(
             title,
             created[0].parent,
             season=season,
             preferred_quality=quality,
         )
+        sync_results = select_and_sync_subtitles(created[0].parent)
         result = f"TV season ZIP created: {created[0]}"
         if subtitles:
-            result += "\nSinhala subtitles:\n" + "\n".join(
+            result += "\nSubtitle candidates:\n" + "\n".join(
                 f"  - {path}" for path in subtitles
             )
         else:
             result += "\nSinhala subtitles: no matching files found"
+        synchronized = [item for item in sync_results if item.get("subtitle")]
+        failed = [item for item in sync_results if not item.get("subtitle")]
+        if synchronized:
+            result += "\nSynchronized episode subtitles:\n" + "\n".join(
+                f"  - {item['subtitle']}" for item in synchronized
+            )
+        if failed:
+            result += "\nEpisodes without a synchronized subtitle:\n" + "\n".join(
+                f"  - {Path(item['video']).name}: {item['error']}" for item in failed
+            )
+        emit_progress(
+            "complete",
+            title=display_title,
+            quality=quality,
+            percent=100,
+            folder=str(created[0].parent),
+            subtitle_count=len(synchronized),
+            message=f"Season ready — synchronized {len(synchronized)} episode subtitle(s)",
+        )
         return result
-    return f"TV download did not complete successfully (exit code {completed.returncode})."
+    emit_progress(
+        "error",
+        title=display_title,
+        quality=quality,
+        message=f"TV download stopped with exit code {returncode}",
+    )
+    return f"TV download did not complete successfully (exit code {returncode})."
 
 
 @tool

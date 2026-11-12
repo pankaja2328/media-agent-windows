@@ -6,7 +6,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, unquote, urlparse
 from zipfile import ZipFile
 
@@ -454,7 +453,7 @@ async def main():
         archive = media_folder / f"{safe_name(title)} - {quality}p - {timestamp}.zip"
         partial = archive.with_suffix(".zip.part")
         try:
-            with TemporaryDirectory(dir=media_folder) as scratch, ZipFile(partial, "x") as zipped:
+            with ZipFile(partial, "x") as zipped:
                 for offset in range(0, len(matches), PARALLEL_DOWNLOADS):
                     batch = matches[offset : offset + PARALLEL_DOWNLOADS]
                     print(
@@ -463,10 +462,8 @@ async def main():
                     )
                     prepared = []
                     for message, name, episodes in batch:
-                        filename = (
-                            f"{message.id} - {safe_name(Path(name).stem)}{Path(name).suffix}"
-                        )
-                        destination = Path(scratch) / filename
+                        filename = safe_name(name)
+                        destination = media_folder / filename
                         label = ",".join(f"E{episode:02d}" for episode in sorted(episodes))
                         prepared.append((message, name, filename, destination, label))
                         print(f"  {label}: {name}")
@@ -477,6 +474,14 @@ async def main():
 
                     async def fetch(item):
                         message, name, filename, destination, label = item
+                        expected_size = int(message.file.size or 0)
+                        if (
+                            destination.exists()
+                            and expected_size
+                            and destination.stat().st_size == expected_size
+                        ):
+                            print(f"Reusing completed episode: {filename}")
+                            return str(destination), filename
                         downloaded = await download_message_file(
                             client,
                             message,
@@ -495,7 +500,6 @@ async def main():
                     print("Adding completed batch to ZIP...")
                     for downloaded, filename in downloaded_batch:
                         zipped.write(downloaded, arcname=filename)
-                        Path(downloaded).unlink()
             partial.rename(archive)
         except BaseException:
             partial.unlink(missing_ok=True)
